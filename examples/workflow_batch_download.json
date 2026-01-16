@@ -1,0 +1,172 @@
+{
+    "last_node_id": 3,
+    "last_link_id": 0,
+    "nodes": [
+        {
+            "id": 1,
+            "type": "HMT_ModelDownloader",
+            "pos": [
+                100,
+                100
+            ],
+            "size": [
+                380,
+                240
+            ],
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "outputs": [
+                {
+                    "name": "status",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "file_path",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "message",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "HMT_ModelDownloader"
+            },
+            "widgets_values": [
+                "file",
+                "https://huggingface.co/stabilityai/sd-vae-ft-mse-original/resolve/main/vae-ft-mse-840000-ema-pruned.safetensors",
+                "vae",
+                "vae-ft-mse.safetensors",
+                false,
+                true
+            ],
+            "title": "Download VAE"
+        },
+        {
+            "id": 2,
+            "type": "HMT_ModelDownloader",
+            "pos": [
+                100,
+                400
+            ],
+            "size": [
+                380,
+                240
+            ],
+            "flags": {},
+            "order": 1,
+            "mode": 0,
+            "outputs": [
+                {
+                    "name": "status",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "file_path",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "message",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "HMT_ModelDownloader"
+            },
+            "widgets_values": [
+                "github",
+                "https://github.com/comfyanonymous/ComfyUI/blob/master/models/configs/v1-inference.yaml",
+                "configs",
+                "sd15-config.yaml",
+                false,
+                true
+            ],
+            "title": "Download SD1.5 Config"
+        },
+        {
+            "id": 3,
+            "type": "HMT_ModelDownloader",
+            "pos": [
+                100,
+                700
+            ],
+            "size": [
+                380,
+                240
+            ],
+            "flags": {},
+            "order": 2,
+            "mode": 0,
+            "outputs": [
+                {
+                    "name": "status",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "file_path",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "message",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "HMT_ModelDownloader"
+            },
+            "widgets_values": [
+                "file",
+                "https://raw.githubusercontent.com/comfyanonymous/ComfyUI/master/extra_model_paths.yaml.example",
+                "configs",
+                "extra_model_paths.yaml",
+                false,
+                true
+            ],
+            "title": "Download Extra Paths Config"
+        }
+    ],
+    "links": [],
+    "groups": [
+        {
+            "title": "Batch Download - 3 Files Simultaneously",
+            "bounding": [
+                50,
+                20,
+                500,
+                950
+            ],
+            "color": "#3f789e",
+            "font_size": 24
+        }
+    ],
+    "config": {},
+    "extra": {
+        "ds": {
+            "scale": 1,
+            "offset": [
+                0,
+                0
+            ]
+        }
+    },
+    "version": 0.4
+}

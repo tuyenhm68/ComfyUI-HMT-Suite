@@ -1,0 +1,51 @@
+{
+    "last_node_id": 2,
+    "last_link_id": 0,
+    "nodes": [
+        {
+            "id": 1,
+            "type": "HMT_CustomNodeInstaller",
+            "pos": [
+                100,
+                100
+            ],
+            "size": {
+                "0": 400,
+                "1": 150
+            },
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "status",
+                    "type": "STRING",
+                    "links": null
+                },
+                {
+                    "name": "installation_path",
+                    "type": "STRING",
+                    "links": null
+                },
+                {
+                    "name": "message",
+                    "type": "STRING",
+                    "links": null
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "HMT_CustomNodeInstaller"
+            },
+            "widgets_values": [
+                "https://github.com/city96/ComfyUI-GGUF",
+                "auto"
+            ]
+        }
+    ],
+    "links": [],
+    "groups": [],
+    "config": {},
+    "extra": {},
+    "version": 0.4
+}
