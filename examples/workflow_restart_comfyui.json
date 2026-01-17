@@ -1,0 +1,74 @@
+{
+    "last_node_id": 1,
+    "last_link_id": 0,
+    "nodes": [
+        {
+            "id": 1,
+            "type": "HMT_ComfyUIRestart",
+            "pos": [
+                400,
+                300
+            ],
+            "size": {
+                "0": 400,
+                "1": 200
+            },
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "status",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "message",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "restart_command",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "HMT_ComfyUIRestart"
+            },
+            "widgets_values": [
+                2,
+                false,
+                true
+            ],
+            "title": "ComfyUI Restart",
+            "color": "#ff6b6b",
+            "bgcolor": "#4a1515"
+        }
+    ],
+    "links": [],
+    "groups": [],
+    "config": {},
+    "extra": {
+        "ds": {
+            "scale": 1,
+            "offset": [
+                0,
+                0
+            ]
+        }
+    },
+    "version": 0.4,
+    "widget_idx_map": {
+        "1": {
+            "restart_delay": 0,
+            "confirm_restart": 1,
+            "show_info": 2
+        }
+    },
+    "seed_widgets": {}
+}

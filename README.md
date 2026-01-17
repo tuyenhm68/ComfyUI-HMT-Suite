@@ -20,6 +20,15 @@ Install ComfyUI custom nodes from GitHub repositories:
 - ✅ **Progress tracking** - Real-time installation progress
 - ✅ **Cross-platform** - Works on both Windows and Linux
 
+### 3. ComfyUI Restart Node
+Safely restart ComfyUI server from within workflows:
+- ✅ **Safe restart** - Preserves all command-line arguments
+- ✅ **Configurable delay** - Set delay before restart (0-10 seconds)
+- ✅ **Confirmation required** - Prevents accidental restarts
+- ✅ **Auto-detection** - Automatically detects Python executable and arguments
+- ✅ **Cross-platform** - Works on Windows, Linux, and macOS
+
+
 
 ## Installation
 
@@ -211,6 +220,90 @@ Result: Installed to `ComfyUI/custom_nodes/some-node`
   - `ComfyUI/python_embedded/python.exe` (alternative spelling)
   - System Python (fallback)
 - ⚠️ **Existing Nodes**: If a node with the same name exists, installation will be skipped
+
+### ComfyUI Restart Node
+
+The ComfyUI Restart node appears in the node menu under **HMT Suite > Utils > ComfyUI Restart**.
+
+#### Parameters:
+
+- **restart_delay**: Delay in seconds before restarting (0-10)
+  - `0`: Immediate restart
+  - `2`: Default, recommended for safe restart
+  - `10`: Maximum delay
+
+- **confirm_restart**: Confirmation flag to actually perform restart
+  - `false`: Shows restart info but doesn't restart (safe mode)
+  - `true`: Actually restarts the server
+  - ⚠️ **Must be true to restart!**
+
+- **show_info**: (Optional) Show detailed restart information
+  - `true`: Shows Python path, arguments, working directory
+  - `false`: Minimal logging
+
+#### Outputs:
+
+- **status**: `success`, `cancelled`, or `error`
+- **message**: Status message with details
+- **restart_command**: Full command used to restart ComfyUI
+
+#### How It Works:
+
+The node automatically detects and preserves:
+- Python executable path (e.g., `H:\ComfyUI\python_embeded\python.exe`)
+- All command-line arguments (e.g., `--windows-standalone-build`, `--port 8188`, `--enable-cors-header`, `--disable-auto-launch`)
+- Current working directory
+
+When restart is confirmed, it:
+1. Flushes all output buffers
+2. Waits for specified delay
+3. Replaces current process with new one
+4. Preserves all original arguments
+
+#### Example Usage:
+
+**Basic restart:**
+```
+restart_delay: 2
+confirm_restart: true
+show_info: true
+```
+Result: ComfyUI restarts after 2 seconds with all arguments preserved
+
+**Quick restart:**
+```
+restart_delay: 0
+confirm_restart: true
+show_info: false
+```
+Result: Immediate restart with minimal logging
+
+**Check restart command (safe mode):**
+```
+restart_delay: 2
+confirm_restart: false
+show_info: true
+```
+Result: Shows restart info without actually restarting
+
+**Auto-restart after installing custom node:**
+```
+[Custom Node Installer] -> [ComfyUI Restart]
+confirm_restart: true
+```
+Result: Automatically restarts after installing a custom node
+
+#### Important Notes:
+
+- ⚠️ **Confirmation Required**: Must set `confirm_restart: true` to actually restart
+- ⚠️ **Connection Loss**: WebSocket connections will be temporarily lost
+- ⚠️ **Unsaved Work**: Save workflows before restarting
+- ⚠️ **Running Workflows**: Any in-progress generations will be cancelled
+- ✅ **Safe**: All command-line arguments are automatically preserved
+- ✅ **Useful After**: Installing custom nodes, updating configurations, clearing memory
+
+For detailed documentation, see [docs/COMFYUI_RESTART.md](docs/COMFYUI_RESTART.md)
+
 
 
 

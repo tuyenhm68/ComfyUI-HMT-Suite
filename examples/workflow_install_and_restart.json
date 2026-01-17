@@ -1,0 +1,160 @@
+{
+    "last_node_id": 2,
+    "last_link_id": 3,
+    "nodes": [
+        {
+            "id": 1,
+            "type": "HMT_CustomNodeInstaller",
+            "pos": [
+                200,
+                300
+            ],
+            "size": {
+                "0": 400,
+                "1": 150
+            },
+            "flags": {},
+            "order": 0,
+            "mode": 0,
+            "inputs": [],
+            "outputs": [
+                {
+                    "name": "status",
+                    "type": "STRING",
+                    "links": [
+                        1
+                    ],
+                    "shape": 3
+                },
+                {
+                    "name": "installation_path",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "message",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "HMT_CustomNodeInstaller"
+            },
+            "widgets_values": [
+                "https://github.com/city96/ComfyUI-GGUF",
+                "auto"
+            ],
+            "title": "1. Install Custom Node",
+            "color": "#4a90e2",
+            "bgcolor": "#1a3a5a"
+        },
+        {
+            "id": 2,
+            "type": "HMT_ComfyUIRestart",
+            "pos": [
+                700,
+                300
+            ],
+            "size": {
+                "0": 400,
+                "1": 200
+            },
+            "flags": {},
+            "order": 1,
+            "mode": 0,
+            "inputs": [
+                {
+                    "name": "trigger",
+                    "type": "STRING",
+                    "link": 1,
+                    "label": "Wait for installation"
+                }
+            ],
+            "outputs": [
+                {
+                    "name": "status",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "message",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                },
+                {
+                    "name": "restart_command",
+                    "type": "STRING",
+                    "links": null,
+                    "shape": 3
+                }
+            ],
+            "properties": {
+                "Node name for S&R": "HMT_ComfyUIRestart"
+            },
+            "widgets_values": [
+                3,
+                false,
+                true
+            ],
+            "title": "2. Auto Restart ComfyUI",
+            "color": "#ff6b6b",
+            "bgcolor": "#4a1515"
+        }
+    ],
+    "links": [
+        [
+            1,
+            1,
+            0,
+            2,
+            0,
+            "STRING"
+        ]
+    ],
+    "groups": [
+        {
+            "title": "Auto Install & Restart Workflow",
+            "bounding": [
+                150,
+                200,
+                1000,
+                400
+            ],
+            "color": "#3f789e",
+            "font_size": 24
+        }
+    ],
+    "config": {},
+    "extra": {
+        "ds": {
+            "scale": 1,
+            "offset": [
+                0,
+                0
+            ]
+        },
+        "info": {
+            "name": "Auto Install Custom Node with Restart",
+            "description": "This workflow demonstrates automatic installation of a custom node followed by ComfyUI restart.\n\nSteps:\n1. Install custom node from GitHub\n2. Automatically restart ComfyUI to load the new node\n\nIMPORTANT: Set 'confirm_restart' to TRUE in node 2 to actually restart!",
+            "version": "1.0",
+            "author": "HMT Suite"
+        }
+    },
+    "version": 0.4,
+    "widget_idx_map": {
+        "1": {
+            "github_url": 0,
+            "platform": 1
+        },
+        "2": {
+            "restart_delay": 0,
+            "confirm_restart": 1,
+            "show_info": 2
+        }
+    },
+    "seed_widgets": {}
+}
