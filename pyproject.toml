@@ -1,0 +1,18 @@
+[project]
+name = "comfyui-hmt-suite"
+description = "A suite of custom nodes for ComfyUI by Ha Manh Tuyen"
+version = "0.1.0"
+license = { file = "LICENSE" }
+dependencies = ["requests>=2.31.0"]
+authors = [
+    { name = "tuyenhm68", email = "tuyenhm68@gmail.com" }
+]
+readme = "README.md"
+
+[project.urls]
+Repository = "https://github.com/tuyenhm68/ComfyUI-HMT-Suite"
+
+[tool.comfy]
+publisher = "tuyenhm68" # TODO: Bạn cần thay thế bằng ID publisher của bạn từ comfy.org
+displayName = "Ha Manh Tuyen"
+icon = "" 
