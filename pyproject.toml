@@ -13,6 +13,6 @@ readme = "README.md"
 Repository = "https://github.com/tuyenhm68/ComfyUI-HMT-Suite"
 
 [tool.comfy]
-publisher = "tuyenhm68"
-displayName = "Ha Manh Tuyen"
-icon = "" 
+PublisherId = "tuyenhm68"
+DisplayName = "Ha Manh Tuyen"
+Icon = "" 
