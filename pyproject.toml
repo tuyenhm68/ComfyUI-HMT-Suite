@@ -13,6 +13,6 @@ readme = "README.md"
 Repository = "https://github.com/tuyenhm68/ComfyUI-HMT-Suite"
 
 [tool.comfy]
-publisher = "tuyenhm68" # TODO: Bạn cần thay thế bằng ID publisher của bạn từ comfy.org
+publisher = "tuyenhm68"
 displayName = "Ha Manh Tuyen"
 icon = "" 
