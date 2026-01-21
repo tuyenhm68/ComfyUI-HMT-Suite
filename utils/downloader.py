@@ -1,16 +1,21 @@
 """
 File Downloader Utility
-Supports downloading files with progress tracking, cross-platform compatible
+Supports downloading files with progress tracking, cross-platform compatible.
+Enhanced with multi-threaded parallel downloading for maximum speed.
 """
 
 import os
 import sys
 import requests
 import hashlib
+import time
+import shutil
+import concurrent.futures
+import threading
 from pathlib import Path
 from typing import Optional, Callable, Dict
 from urllib.parse import urlparse, unquote
-
+from threading import Lock
 
 def log_to_console(message: str, level: str = "INFO"):
     """Log message to console with color coding"""
@@ -37,26 +42,46 @@ class DownloadProgress:
         self.error_message = None
         self.filename = None
         self.destination = None
+        self._lock = Lock()
     
+    def update(self, downloaded_delta: int):
+        """Thread-safe update of downloaded bytes"""
+        with self._lock:
+            self.downloaded += downloaded_delta
+            if self.total_size > 0:
+                self.percentage = int((self.downloaded / self.total_size) * 100)
+    
+    def set_total(self, total: int):
+        with self._lock:
+            self.total_size = total
+
     def to_dict(self) -> Dict:
         """Convert to dictionary for API response"""
-        return {
-            "total_size": self.total_size,
-            "downloaded": self.downloaded,
-            "percentage": self.percentage,
-            "status": self.status,
-            "error_message": self.error_message,
-            "filename": self.filename,
-            "destination": self.destination
-        }
+        with self._lock:
+            return {
+                "total_size": self.total_size,
+                "downloaded": self.downloaded,
+                "percentage": self.percentage,
+                "status": self.status,
+                "error_message": self.error_message,
+                "filename": self.filename,
+                "destination": self.destination
+            }
 
 
 class FileDownloader:
-    """Download files from direct URLs with progress tracking"""
+    """Download files from direct URLs with multi-threaded progress tracking"""
     
-    def __init__(self, chunk_size: int = 8192):
-        self.chunk_size = chunk_size
+    def __init__(self, chunk_size: int = 1024 * 1024, max_workers: int = 16, min_part_size: int = 1024 * 1024 * 10):
+        self.chunk_size = chunk_size  # 1MB default
+        self.max_workers = max_workers
+        self.min_part_size = min_part_size # 10MB min
         self.progress = DownloadProgress()
+        self.session = requests.Session()
+        # Set generous timeouts and retries
+        adapter = requests.adapters.HTTPAdapter(max_retries=3)
+        self.session.mount('http://', adapter)
+        self.session.mount('https://', adapter)
     
     def get_filename_from_url(self, url: str, response: Optional[requests.Response] = None) -> str:
         """Extract filename from URL or Content-Disposition header"""
@@ -80,6 +105,23 @@ class FileDownloader:
         
         return filename
     
+    def _download_part(self, url: str, start: int, end: int, part_path: Path, progress_callback: Optional[Callable] = None):
+        """Download a specific part of the file"""
+        headers = {'Range': f'bytes={start}-{end}'}
+        try:
+            with self.session.get(url, headers=headers, stream=True, timeout=30) as response:
+                response.raise_for_status()
+                with open(part_path, 'wb') as f:
+                    for chunk in response.iter_content(chunk_size=self.chunk_size):
+                        if chunk:
+                            f.write(chunk)
+                            size = len(chunk)
+                            self.progress.update(size)
+            return True
+        except Exception as e:
+            log_to_console(f"Part download failed ({start}-{end}): {e}", "WARNING")
+            return False
+
     def download(
         self,
         url: str,
@@ -89,59 +131,52 @@ class FileDownloader:
         progress_callback: Optional[Callable[[DownloadProgress], None]] = None
     ) -> Dict:
         """
-        Download file from URL
-        
-        Args:
-            url: Direct download URL
-            destination_folder: Folder to save file (will be created if not exists)
-            filename: Optional custom filename (auto-detect if None)
-            overwrite: Whether to overwrite existing file
-            progress_callback: Optional callback function for progress updates
-        
-        Returns:
-            Dictionary with download status and info
+        Download file from URL with parallel support
         """
         try:
+            self.progress = DownloadProgress() # Reset progress
             self.progress.status = "downloading"
             
             log_to_console(f"Starting download from: {url}", "INFO")
             
-            # Create destination folder (cross-platform)
+            # Create destination folder
             dest_path = Path(destination_folder)
             dest_path.mkdir(parents=True, exist_ok=True)
             
-            log_to_console(f"Destination folder: {dest_path}", "INFO")
-            
-            # Make initial request to get file info
-            response = requests.get(url, stream=True, timeout=30)
-            response.raise_for_status()
-            
-            # Get filename
+            # Initial Request to get metadata
+            head_resp = None
+            try:
+                head_resp = self.session.head(url, allow_redirects=True, timeout=10)
+                # If HEAD fails (some servers deny it), try GET with stream
+                if head_resp.status_code >= 400:
+                     head_resp = self.session.get(url, stream=True, timeout=10)
+                     head_resp.close() # Close immediately, we just want headers
+            except:
+                # Fallback to simple get if head fails
+                head_resp = None
+
+            # Determine filename
             if not filename:
-                filename = self.get_filename_from_url(url, response)
+                if head_resp:
+                    filename = self.get_filename_from_url(url, head_resp)
+                else:
+                     filename = self.get_filename_from_url(url)
             
             self.progress.filename = filename
             log_to_console(f"Filename: {filename}", "INFO")
             
-            # Full file path
             file_path = dest_path / filename
             self.progress.destination = str(file_path)
             
-            # Check if file exists
+            # Check existing
             if file_path.exists():
                 if not overwrite:
                     existing_size = file_path.stat().st_size
-                    existing_size_mb = existing_size / (1024 * 1024)
-                    
                     self.progress.status = "completed"
                     self.progress.percentage = 100
                     self.progress.total_size = existing_size
                     self.progress.downloaded = existing_size
-                    
-                    log_to_console(f"File already exists: {file_path}", "WARNING")
-                    log_to_console(f"Existing file size: {existing_size_mb:.2f} MB", "INFO")
-                    log_to_console("Skipping download (overwrite=False)", "INFO")
-                    
+                    log_to_console(f"File exists: {file_path} ({existing_size/(1024*1024):.2f} MB). Skipping.", "WARNING")
                     return {
                         "success": True,
                         "message": "File already exists, skipped download",
@@ -150,51 +185,174 @@ class FileDownloader:
                         "progress": self.progress.to_dict()
                     }
                 else:
-                    log_to_console(f"File exists, will overwrite: {file_path}", "WARNING")
+                    log_to_console(f"File exists, overwriting...", "WARNING")
             
-            # Get total file size
-            self.progress.total_size = int(response.headers.get('content-length', 0))
+            # Get content length and accept-ranges
+            total_size = 0
+            accept_ranges = False
             
-            if self.progress.total_size > 0:
-                size_mb = self.progress.total_size / (1024 * 1024)
-                log_to_console(f"File size: {size_mb:.2f} MB", "INFO")
+            if head_resp:
+                total_size = int(head_resp.headers.get('content-length', 0))
+                
+                # Check accept-ranges header properly (case-insensitive)
+                accept_ranges_header = head_resp.headers.get('Accept-Ranges', '').lower()
+                if 'bytes' in accept_ranges_header:
+                    accept_ranges = True
+            else:
+                # Fallback to GET to find size
+                 with self.session.get(url, stream=True, timeout=10) as r:
+                     total_size = int(r.headers.get('content-length', 0))
+                     accept_ranges_header = r.headers.get('Accept-Ranges', '').lower()
+                     if 'bytes' in accept_ranges_header:
+                         accept_ranges = True
+
+            self.progress.set_total(total_size)
             
-            log_to_console("Downloading...", "INFO")
+            if total_size > 0:
+                log_to_console(f"File size: {total_size / (1024*1024):.2f} MB", "INFO")
+            else:
+                log_to_console("File size unknown.", "WARNING")
+
+            # DECIDE STRATEGY
+            use_parallel = False
+            if accept_ranges and total_size > self.min_part_size:
+                use_parallel = True
+                log_to_console("Server supports parallel download. Accelerating...", "SUCCESS")
+            else:
+                log_to_console("Using single-threaded download.", "INFO")
+
+            start_time = time.time()
             
-            # Download file
-            last_log_percentage = -1  # Track last logged percentage
-            with open(file_path, 'wb') as f:
-                for chunk in response.iter_content(chunk_size=self.chunk_size):
-                    if chunk:
-                        f.write(chunk)
-                        self.progress.downloaded += len(chunk)
+            if use_parallel:
+                # Calculate parts
+                num_workers = self.max_workers
+                part_size = total_size // num_workers
+                
+                # Adjust if part size is too small
+                if part_size < self.min_part_size:
+                    num_workers = max(1, total_size // self.min_part_size)
+                    part_size = total_size // num_workers
+                
+                log_to_console(f"Splitting into {num_workers} parts...", "INFO")
+                
+                ranges = []
+                for i in range(num_workers):
+                    start = i * part_size
+                    end = start + part_size - 1
+                    if i == num_workers - 1:
+                        end = total_size - 1
+                    ranges.append((start, end))
+                
+                # Temp directory for parts
+                temp_dir = dest_path / f".tmp_{filename}_{int(time.time())}"
+                temp_dir.mkdir(exist_ok=True)
+                
+                part_files = []
+                futures = []
+                
+                monitor_thread = None
+                stop_monitor = False
+
+                def monitor_progress():
+                    last_pct = -1
+                    while not stop_monitor:
+                        pct = self.progress.percentage
+                        if pct != last_pct and pct >= 0:
+                            downloaded_mb = self.progress.downloaded / (1024 * 1024)
+                            total_mb = self.progress.total_size / (1024 * 1024)
+                            print(f"\r\033[94m[Model Downloader - INFO]\033[0m Progress: {pct}% ({downloaded_mb:.2f}/{total_mb:.2f} MB)", end='', flush=True)
+                            last_pct = pct
+                            if progress_callback:
+                                try:
+                                    progress_callback(self.progress)
+                                except:
+                                    pass
+                        time.sleep(0.5)
+
+                try:
+                    # Start Monitor
+                    monitor_thread = threading.Thread(target=monitor_progress)
+                    monitor_thread.daemon = True # Ensure thread dies if main dies
+                    monitor_thread.start()
+
+                    with concurrent.futures.ThreadPoolExecutor(max_workers=num_workers) as executor:
+                        for i, (start, end) in enumerate(ranges):
+                            p_path = temp_dir / f"part_{i}"
+                            part_files.append(p_path)
+                            futures.append(executor.submit(self._download_part, url, start, end, p_path))
                         
-                        # Calculate percentage
-                        if self.progress.total_size > 0:
-                            self.progress.percentage = int(
-                                (self.progress.downloaded / self.progress.total_size) * 100
-                            )
-                            
-                            # Update progress on same line (every 1%)
-                            if self.progress.percentage != last_log_percentage:
-                                downloaded_mb = self.progress.downloaded / (1024 * 1024)
-                                total_mb = self.progress.total_size / (1024 * 1024)
-                                # Use \r to overwrite the same line
-                                print(f"\r\033[94m[Model Downloader - INFO]\033[0m Progress: {self.progress.percentage}% ({downloaded_mb:.2f}/{total_mb:.2f} MB)", end='', flush=True)
-                                last_log_percentage = self.progress.percentage
-                        
-                        # Call progress callback if provided
-                        if progress_callback:
-                            progress_callback(self.progress)
+                        # Wait for valid completion
+                        for future in concurrent.futures.as_completed(futures):
+                            if not future.result():
+                                raise Exception("One or more parts failed to download")
+                    
+                    stop_monitor = True
+                    monitor_thread.join(timeout=1.0) # Wait a bit but don't hang
+                    print() # Newline
+
+                    # Combine parts
+                    log_to_console("Merging parts...", "INFO")
+                    with open(file_path, 'wb') as outfile:
+                        for p_path in part_files:
+                            if p_path.exists():
+                                with open(p_path, 'rb') as infile:
+                                    shutil.copyfileobj(infile, outfile)
+                            else:
+                                raise Exception(f"Part file missing: {p_path}")
+                    
+                    # Cleanup temp dir
+                    try:
+                        shutil.rmtree(temp_dir)
+                    except:
+                        pass # Ignore cleanup errors
+
+                except Exception as e:
+                    stop_monitor = True
+                    if monitor_thread and monitor_thread.is_alive():
+                        monitor_thread.join(timeout=1.0)
+                    print()
+                    # Cleanup
+                    if temp_dir.exists():
+                        try:
+                            shutil.rmtree(temp_dir)
+                        except:
+                            pass
+                    raise e
+
+            else:
+                # Single threaded fallback
+                with self.session.get(url, stream=True, timeout=30) as response:
+                    response.raise_for_status()
+                    
+                    last_log_percentage = -1
+                    with open(file_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=self.chunk_size):
+                            if chunk:
+                                f.write(chunk)
+                                self.progress.update(len(chunk))
+                                
+                                # Log
+                                if self.progress.percentage != last_log_percentage:
+                                    downloaded_mb = self.progress.downloaded / (1024 * 1024)
+                                    total_mb = (self.progress.total_size / (1024 * 1024)) if self.progress.total_size else 0
+                                    print(f"\r\033[94m[Model Downloader - INFO]\033[0m Progress: {self.progress.percentage}% ({downloaded_mb:.2f}/{total_mb:.2f} MB)", end='', flush=True)
+                                    last_log_percentage = self.progress.percentage
+                                    
+                                    if progress_callback:
+                                        try:
+                                            progress_callback(self.progress)
+                                        except:
+                                            pass
+                    print() # Newline
+
+            elapsed = time.time() - start_time
+            avg_speed = (self.progress.total_size / (1024*1024)) / elapsed if elapsed > 0 else 0
             
-            # Print newline after progress completes
-            print()  # Move to next line
-            
-            # Mark as completed
             self.progress.status = "completed"
             self.progress.percentage = 100
             
             log_to_console(f"Download completed: {file_path}", "SUCCESS")
+            log_to_console(f"Average Speed: {avg_speed:.2f} MB/s", "SUCCESS")
             
             if progress_callback:
                 progress_callback(self.progress)
@@ -206,34 +364,17 @@ class FileDownloader:
                 "file_size": self.progress.total_size,
                 "progress": self.progress.to_dict()
             }
-            
-        except requests.exceptions.RequestException as e:
-            self.progress.status = "error"
-            self.progress.error_message = f"Network error: {str(e)}"
-            
-            log_to_console(f"Download failed: {str(e)}", "ERROR")
-            
-            if progress_callback:
-                progress_callback(self.progress)
-            
-            return {
-                "success": False,
-                "message": f"Download failed: {str(e)}",
-                "progress": self.progress.to_dict()
-            }
-        
+
         except Exception as e:
             self.progress.status = "error"
             self.progress.error_message = str(e)
-            
-            log_to_console(f"Error: {str(e)}", "ERROR")
-            
+            log_to_console(f"Download failed: {str(e)}", "ERROR")
             if progress_callback:
                 progress_callback(self.progress)
-            
+               
             return {
                 "success": False,
-                "message": f"Error: {str(e)}",
+                "message": f"Download failed: {str(e)}",
                 "progress": self.progress.to_dict()
             }
     
