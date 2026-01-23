@@ -193,57 +193,82 @@ class CustomNodeInstaller:
                 progress.downloaded = 0
                 progress.total_size = 0
                 progress_callback(progress)
-            
-            
-            
-            # Step 2: Check for and run platform-specific install scripts
-            if actual_platform == "windows":
-                # Windows: check for .bat files
-                install_script = dest_path / "install.bat"
-                setup_script = dest_path / "setup.bat"
-                script_type = "bat"
+
+
+
+            # Step 2: Check for and run installation scripts
+            # Priority order: install.py > install.bat/sh > setup.bat/sh
+
+            # First check for install.py (cross-platform Python script)
+            install_py = dest_path / "install.py"
+
+            if install_py.exists():
+                log_to_console("Step 2: Found install.py, running Python installation script...", "INFO")
+
+                if progress_callback:
+                    progress = DownloadProgress()
+                    progress.status = "running_install_py"
+                    progress.percentage = 55
+                    progress.downloaded = 0
+                    progress.total_size = 0
+                    progress_callback(progress)
+
+                script_result = self._run_python_script(install_py)
+
+                if not script_result['success']:
+                    log_to_console(
+                        f"Warning: install.py execution had issues: {script_result['message']}",
+                        "WARNING"
+                    )
             else:
-                # Linux: check for .sh files
-                install_script = dest_path / "install.sh"
-                setup_script = dest_path / "setup.sh"
-                script_type = "sh"
-            
-            if install_script.exists():
-                log_to_console(f"Step 2: Found {install_script.name}, running installation script...", "INFO")
-                
-                if progress_callback:
-                    progress = DownloadProgress()
-                    progress.status = "running_install_script"
-                    progress.percentage = 55
-                    progress.downloaded = 0
-                    progress.total_size = 0
-                    progress_callback(progress)
-                
-                script_result = self._run_script(install_script, script_type)
-                
-                if not script_result['success']:
-                    log_to_console(
-                        f"Warning: {install_script.name} execution had issues: {script_result['message']}", 
-                        "WARNING"
-                    )
-            elif setup_script.exists():
-                log_to_console(f"Step 2: Found {setup_script.name}, running setup script...", "INFO")
-                
-                if progress_callback:
-                    progress = DownloadProgress()
-                    progress.status = "running_setup_script"
-                    progress.percentage = 55
-                    progress.downloaded = 0
-                    progress.total_size = 0
-                    progress_callback(progress)
-                
-                script_result = self._run_script(setup_script, script_type)
-                
-                if not script_result['success']:
-                    log_to_console(
-                        f"Warning: {setup_script.name} execution had issues: {script_result['message']}", 
-                        "WARNING"
-                    )
+                # No install.py, check for platform-specific scripts
+                if actual_platform == "windows":
+                    # Windows: check for .bat files
+                    install_script = dest_path / "install.bat"
+                    setup_script = dest_path / "setup.bat"
+                    script_type = "bat"
+                else:
+                    # Linux: check for .sh files
+                    install_script = dest_path / "install.sh"
+                    setup_script = dest_path / "setup.sh"
+                    script_type = "sh"
+
+                if install_script.exists():
+                    log_to_console(f"Step 2: Found {install_script.name}, running installation script...", "INFO")
+
+                    if progress_callback:
+                        progress = DownloadProgress()
+                        progress.status = "running_install_script"
+                        progress.percentage = 55
+                        progress.downloaded = 0
+                        progress.total_size = 0
+                        progress_callback(progress)
+
+                    script_result = self._run_script(install_script, script_type)
+
+                    if not script_result['success']:
+                        log_to_console(
+                            f"Warning: {install_script.name} execution had issues: {script_result['message']}",
+                            "WARNING"
+                        )
+                elif setup_script.exists():
+                    log_to_console(f"Step 2: Found {setup_script.name}, running setup script...", "INFO")
+
+                    if progress_callback:
+                        progress = DownloadProgress()
+                        progress.status = "running_setup_script"
+                        progress.percentage = 55
+                        progress.downloaded = 0
+                        progress.total_size = 0
+                        progress_callback(progress)
+
+                    script_result = self._run_script(setup_script, script_type)
+
+                    if not script_result['success']:
+                        log_to_console(
+                            f"Warning: {setup_script.name} execution had issues: {script_result['message']}",
+                            "WARNING"
+                        )
 
             
             # Step 3: Check for and install requirements.txt automatically
@@ -524,20 +549,85 @@ class CustomNodeInstaller:
             }
     
     
-    def _run_script(self, script_path: Path, script_type: str) -> Dict:
+    def _run_python_script(self, script_path: Path) -> Dict:
         """
-        Run an installation script (.bat for Windows, .sh for Linux)
-        
+        Run a Python installation script (install.py)
+
         Args:
-            script_path: Path to the script
-            script_type: Type of script ('bat' or 'sh')
-        
+            script_path: Path to the Python script
+
         Returns:
             Dict with success status and message
         """
         try:
             log_to_console(f"Running: {script_path.name}", "INFO")
-            
+
+            # Build command to run Python script
+            cmd = [
+                str(self.python_executable),
+                '-s',
+                str(script_path)
+            ]
+
+            log_to_console(f"Command: {' '.join(cmd)}", "INFO")
+
+            # Execute script from the script's directory so relative paths work correctly
+            result = subprocess.run(
+                cmd,
+                cwd=str(script_path.parent),
+                capture_output=True,
+                text=True,
+                timeout=600  # 10 minutes timeout
+            )
+
+            if result.returncode == 0:
+                log_to_console(f"{script_path.name} executed successfully", "SUCCESS")
+                if result.stdout:
+                    log_to_console(f"Output: {result.stdout}", "INFO")
+                return {
+                    'success': True,
+                    'message': f'{script_path.name} executed successfully'
+                }
+            else:
+                error_msg = f"{script_path.name} execution had errors: {result.stderr}"
+                log_to_console(error_msg, "WARNING")
+                if result.stdout:
+                    log_to_console(f"Output: {result.stdout}", "INFO")
+                # Don't fail completely, as the script might have partially succeeded
+                return {
+                    'success': True,
+                    'message': f'{script_path.name} completed with warnings. Check logs for details.'
+                }
+
+        except subprocess.TimeoutExpired:
+            error_msg = f"{script_path.name} timed out after 10 minutes"
+            log_to_console(error_msg, "ERROR")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+        except Exception as e:
+            error_msg = f"{script_path.name} execution failed: {str(e)}"
+            log_to_console(error_msg, "ERROR")
+            return {
+                'success': False,
+                'message': error_msg
+            }
+
+    def _run_script(self, script_path: Path, script_type: str) -> Dict:
+        """
+        Run an installation script (.bat for Windows, .sh for Linux)
+
+        Args:
+            script_path: Path to the script
+            script_type: Type of script ('bat' or 'sh')
+
+        Returns:
+            Dict with success status and message
+        """
+        try:
+            log_to_console(f"Running: {script_path.name}", "INFO")
+
             # Prepare command based on script type
             if script_type == "sh":
                 # For .sh files, make executable first and run with bash
@@ -546,14 +636,14 @@ class CustomNodeInstaller:
                     os.chmod(script_path, 0o755)
                 except:
                     pass  # Ignore chmod errors on Windows
-                
+
                 cmd = ['bash', str(script_path)]
                 use_shell = False
             else:
                 # For .bat files on Windows
                 cmd = [str(script_path)]
                 use_shell = True
-            
+
             # Execute script
             # Run from the script's directory so relative paths work correctly
             result = subprocess.run(
@@ -564,7 +654,7 @@ class CustomNodeInstaller:
                 timeout=600,  # 10 minutes timeout
                 shell=use_shell
             )
-            
+
             if result.returncode == 0:
                 log_to_console(f"{script_path.name} executed successfully", "SUCCESS")
                 return {
@@ -579,7 +669,7 @@ class CustomNodeInstaller:
                     'success': True,
                     'message': f'{script_path.name} completed with warnings. Check logs for details.'
                 }
-        
+
         except subprocess.TimeoutExpired:
             error_msg = f"{script_path.name} timed out after 10 minutes"
             log_to_console(error_msg, "ERROR")
