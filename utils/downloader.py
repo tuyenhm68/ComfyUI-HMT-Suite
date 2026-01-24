@@ -78,8 +78,16 @@ class FileDownloader:
         self.min_part_size = min_part_size # 10MB min
         self.progress = DownloadProgress()
         self.session = requests.Session()
-        # Set generous timeouts and retries
-        adapter = requests.adapters.HTTPAdapter(max_retries=3)
+
+        # Configure connection pool to support all workers
+        # pool_connections: number of pools to cache (one per host)
+        # pool_maxsize: maximum connections per pool
+        # Set pool_maxsize to max_workers + buffer to avoid "pool is full" warnings
+        adapter = requests.adapters.HTTPAdapter(
+            max_retries=3,
+            pool_connections=10,
+            pool_maxsize=max(max_workers + 5, 20)  # Add buffer for parallel requests
+        )
         self.session.mount('http://', adapter)
         self.session.mount('https://', adapter)
     
@@ -106,21 +114,30 @@ class FileDownloader:
         return filename
     
     def _download_part(self, url: str, start: int, end: int, part_path: Path, progress_callback: Optional[Callable] = None):
-        """Download a specific part of the file"""
+        """Download a specific part of the file with retry logic"""
         headers = {'Range': f'bytes={start}-{end}'}
-        try:
-            with self.session.get(url, headers=headers, stream=True, timeout=30) as response:
-                response.raise_for_status()
-                with open(part_path, 'wb') as f:
-                    for chunk in response.iter_content(chunk_size=self.chunk_size):
-                        if chunk:
-                            f.write(chunk)
-                            size = len(chunk)
-                            self.progress.update(size)
-            return True
-        except Exception as e:
-            log_to_console(f"Part download failed ({start}-{end}): {e}", "WARNING")
-            return False
+        max_retries = 3
+        retry_delay = 2  # seconds
+
+        for attempt in range(max_retries):
+            try:
+                # Increase timeout: 60s connection + 120s read
+                with self.session.get(url, headers=headers, stream=True, timeout=(60, 120)) as response:
+                    response.raise_for_status()
+                    with open(part_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=self.chunk_size):
+                            if chunk:
+                                f.write(chunk)
+                                size = len(chunk)
+                                self.progress.update(size)
+                return True
+            except Exception as e:
+                if attempt < max_retries - 1:
+                    log_to_console(f"Part download failed ({start}-{end}), retrying ({attempt+1}/{max_retries}): {e}", "WARNING")
+                    time.sleep(retry_delay * (attempt + 1))  # Exponential backoff
+                else:
+                    log_to_console(f"Part download failed ({start}-{end}) after {max_retries} attempts: {e}", "ERROR")
+                    return False
 
     def download(
         self,
@@ -146,10 +163,10 @@ class FileDownloader:
             # Initial Request to get metadata
             head_resp = None
             try:
-                head_resp = self.session.head(url, allow_redirects=True, timeout=10)
+                head_resp = self.session.head(url, allow_redirects=True, timeout=30)
                 # If HEAD fails (some servers deny it), try GET with stream
                 if head_resp.status_code >= 400:
-                     head_resp = self.session.get(url, stream=True, timeout=10)
+                     head_resp = self.session.get(url, stream=True, timeout=30)
                      head_resp.close() # Close immediately, we just want headers
             except:
                 # Fallback to simple get if head fails
@@ -200,7 +217,7 @@ class FileDownloader:
                     accept_ranges = True
             else:
                 # Fallback to GET to find size
-                 with self.session.get(url, stream=True, timeout=10) as r:
+                 with self.session.get(url, stream=True, timeout=30) as r:
                      total_size = int(r.headers.get('content-length', 0))
                      accept_ranges_header = r.headers.get('Accept-Ranges', '').lower()
                      if 'bytes' in accept_ranges_header:
@@ -321,7 +338,8 @@ class FileDownloader:
 
             else:
                 # Single threaded fallback
-                with self.session.get(url, stream=True, timeout=30) as response:
+                # Increase timeout: 60s connection + 120s read
+                with self.session.get(url, stream=True, timeout=(60, 120)) as response:
                     response.raise_for_status()
                     
                     last_log_percentage = -1
