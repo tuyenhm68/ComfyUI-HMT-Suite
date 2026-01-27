@@ -45,6 +45,7 @@
                 "vae",
                 "vae-ft-mse.safetensors",
                 false,
+                "",
                 true
             ],
             "title": "Download VAE"
@@ -92,6 +93,7 @@
                 "configs",
                 "sd15-config.yaml",
                 false,
+                "",
                 true
             ],
             "title": "Download SD1.5 Config"
@@ -139,6 +141,7 @@
                 "configs",
                 "extra_model_paths.yaml",
                 false,
+                "",
                 true
             ],
             "title": "Download Extra Paths Config"

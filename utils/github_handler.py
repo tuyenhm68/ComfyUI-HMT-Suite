@@ -97,18 +97,20 @@ class GitHubHandler:
         destination_folder: str,
         filename: Optional[str] = None,
         overwrite: bool = False,
-        progress_callback: Optional[Callable[[DownloadProgress], None]] = None
+        progress_callback: Optional[Callable[[DownloadProgress], None]] = None,
+        auth_token: Optional[str] = None
     ) -> Dict:
         """
         Download a single file from GitHub
-        
+
         Args:
             url: GitHub URL (raw, blob, or release)
             destination_folder: Folder to save file
             filename: Optional custom filename
             overwrite: Whether to overwrite existing file
             progress_callback: Optional callback for progress updates
-        
+            auth_token: Optional authentication token (for private repos or rate limiting)
+
         Returns:
             Dictionary with download status and info
         """
@@ -145,7 +147,8 @@ class GitHubHandler:
                 destination_folder=destination_folder,
                 filename=filename,
                 overwrite=overwrite,
-                progress_callback=progress_callback
+                progress_callback=progress_callback,
+                auth_token=auth_token
             )
             
             # Update our progress from file_downloader

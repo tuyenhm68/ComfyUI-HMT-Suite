@@ -44,6 +44,11 @@ class ModelDownloaderNode:
                 }),
             },
             "optional": {
+                "hf_token": ("STRING", {
+                    "default": "",
+                    "multiline": False,
+                    "placeholder": "hf_xxxxx (optional, for private/gated models)"
+                }),
                 "extract_repo": ("BOOLEAN", {
                     "default": True
                 }),
@@ -73,21 +78,23 @@ class ModelDownloaderNode:
         destination_folder: str,
         filename: str = "",
         overwrite: bool = False,
+        hf_token: str = "",
         extract_repo: bool = True
     ):
         """
         Download model from URL
-        
+
         Args:
             download_type: "file" or "github"
             url: Source URL
             destination_folder: Destination folder relative to ComfyUI/models/
             filename: Optional custom filename (auto-detect if empty)
             overwrite: Whether to overwrite existing files
+            hf_token: Optional Hugging Face token for private/gated models
             extract_repo: Whether to extract GitHub repository (only for repo downloads)
-        
+
         Returns:
-            Tuple of (status, file_path, message)
+            Tuple of (status, file_path, message, progress_percentage)
         """
         try:
             log_to_console("="*60, "INFO")
@@ -134,7 +141,8 @@ class ModelDownloaderNode:
                     destination_folder=str(dest_path),
                     filename=filename if filename.strip() else None,
                     overwrite=overwrite,
-                    progress_callback=self.progress_callback
+                    progress_callback=self.progress_callback,
+                    auth_token=hf_token if hf_token.strip() else None
                 )
             
             elif download_type == "github":
@@ -156,7 +164,8 @@ class ModelDownloaderNode:
                         destination_folder=str(dest_path),
                         filename=filename if filename.strip() else None,
                         overwrite=overwrite,
-                        progress_callback=self.progress_callback
+                        progress_callback=self.progress_callback,
+                        auth_token=hf_token if hf_token.strip() else None
                     )
             
             else:

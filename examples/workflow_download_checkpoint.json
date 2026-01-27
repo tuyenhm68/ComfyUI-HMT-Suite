@@ -45,6 +45,7 @@
                 "checkpoints",
                 "sd_xl_base_1.0.safetensors",
                 false,
+                "",
                 true
             ],
             "title": "Download SDXL Checkpoint"

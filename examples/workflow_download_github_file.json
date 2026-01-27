@@ -45,6 +45,7 @@
                 "configs",
                 "v1-inference.yaml",
                 false,
+                "",
                 true
             ],
             "title": "Download Config from GitHub"

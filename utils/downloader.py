@@ -78,6 +78,7 @@ class FileDownloader:
         self.min_part_size = min_part_size # 10MB min
         self.progress = DownloadProgress()
         self.session = requests.Session()
+        self.auth_headers = {}  # Store authentication headers
 
         # Configure connection pool to support all workers
         # pool_connections: number of pools to cache (one per host)
@@ -116,6 +117,9 @@ class FileDownloader:
     def _download_part(self, url: str, start: int, end: int, part_path: Path, progress_callback: Optional[Callable] = None):
         """Download a specific part of the file with retry logic"""
         headers = {'Range': f'bytes={start}-{end}'}
+        # Merge with authentication headers if present
+        headers.update(self.auth_headers)
+
         max_retries = 3
         retry_delay = 2  # seconds
 
@@ -145,15 +149,30 @@ class FileDownloader:
         destination_folder: str,
         filename: Optional[str] = None,
         overwrite: bool = False,
-        progress_callback: Optional[Callable[[DownloadProgress], None]] = None
+        progress_callback: Optional[Callable[[DownloadProgress], None]] = None,
+        auth_token: Optional[str] = None
     ) -> Dict:
         """
         Download file from URL with parallel support
+
+        Args:
+            url: URL to download from
+            destination_folder: Folder to save the file
+            filename: Optional custom filename
+            overwrite: Whether to overwrite existing files
+            progress_callback: Callback function for progress updates
+            auth_token: Optional authentication token (e.g., Hugging Face token)
         """
         try:
             self.progress = DownloadProgress() # Reset progress
             self.progress.status = "downloading"
-            
+
+            # Set authentication headers if token provided
+            self.auth_headers = {}
+            if auth_token and auth_token.strip():
+                self.auth_headers['Authorization'] = f'Bearer {auth_token.strip()}'
+                log_to_console("Authentication token provided", "INFO")
+
             log_to_console(f"Starting download from: {url}", "INFO")
             
             # Create destination folder
@@ -163,10 +182,10 @@ class FileDownloader:
             # Initial Request to get metadata
             head_resp = None
             try:
-                head_resp = self.session.head(url, allow_redirects=True, timeout=30)
+                head_resp = self.session.head(url, allow_redirects=True, timeout=30, headers=self.auth_headers)
                 # If HEAD fails (some servers deny it), try GET with stream
                 if head_resp.status_code >= 400:
-                     head_resp = self.session.get(url, stream=True, timeout=30)
+                     head_resp = self.session.get(url, stream=True, timeout=30, headers=self.auth_headers)
                      head_resp.close() # Close immediately, we just want headers
             except:
                 # Fallback to simple get if head fails
@@ -217,7 +236,7 @@ class FileDownloader:
                     accept_ranges = True
             else:
                 # Fallback to GET to find size
-                 with self.session.get(url, stream=True, timeout=30) as r:
+                 with self.session.get(url, stream=True, timeout=30, headers=self.auth_headers) as r:
                      total_size = int(r.headers.get('content-length', 0))
                      accept_ranges_header = r.headers.get('Accept-Ranges', '').lower()
                      if 'bytes' in accept_ranges_header:
@@ -339,7 +358,7 @@ class FileDownloader:
             else:
                 # Single threaded fallback
                 # Increase timeout: 60s connection + 120s read
-                with self.session.get(url, stream=True, timeout=(60, 120)) as response:
+                with self.session.get(url, stream=True, timeout=(60, 120), headers=self.auth_headers) as response:
                     response.raise_for_status()
                     
                     last_log_percentage = -1
