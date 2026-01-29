@@ -153,10 +153,11 @@ class CustomNodeInstaller:
             
             # Check if already exists
             if dest_path.exists():
-                log_to_console(f"Custom node folder already exists: {dest_path}", "WARNING")
+                log_to_console(f"Custom node folder already exists: {dest_path}", "INFO")
+                log_to_console(f"Custom node '{node_name}' is already installed, skipping installation.", "SUCCESS")
                 return {
-                    'success': False,
-                    'message': f"Custom node '{node_name}' already exists. Please remove it first or use a different name.",
+                    'success': True,
+                    'message': f"Custom node '{node_name}' is already installed.",
                     'path': str(dest_path)
                 }
             
