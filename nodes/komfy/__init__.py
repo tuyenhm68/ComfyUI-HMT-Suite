@@ -1,0 +1,43 @@
+"""
+Komfy Protocol Nodes
+Data-centric input nodes for zero-config app generation.
+
+Version: 1.2.0
+Namespace: Komfy_
+Category: Komfy
+"""
+
+from .komfy_integer import NODE_CLASS_MAPPINGS as INTEGER_MAPPINGS
+from .komfy_integer import NODE_DISPLAY_NAME_MAPPINGS as INTEGER_DISPLAY_MAPPINGS
+
+from .komfy_float import NODE_CLASS_MAPPINGS as FLOAT_MAPPINGS
+from .komfy_float import NODE_DISPLAY_NAME_MAPPINGS as FLOAT_DISPLAY_MAPPINGS
+
+from .komfy_string import NODE_CLASS_MAPPINGS as STRING_MAPPINGS
+from .komfy_string import NODE_DISPLAY_NAME_MAPPINGS as STRING_DISPLAY_MAPPINGS
+
+from .komfy_boolean import NODE_CLASS_MAPPINGS as BOOLEAN_MAPPINGS
+from .komfy_boolean import NODE_DISPLAY_NAME_MAPPINGS as BOOLEAN_DISPLAY_MAPPINGS
+
+from .komfy_aspect_ratio import NODE_CLASS_MAPPINGS as ASPECT_RATIO_MAPPINGS
+from .komfy_aspect_ratio import NODE_DISPLAY_NAME_MAPPINGS as ASPECT_RATIO_DISPLAY_MAPPINGS
+
+
+# Merge all node mappings
+NODE_CLASS_MAPPINGS = {
+    **INTEGER_MAPPINGS,
+    **FLOAT_MAPPINGS,
+    **STRING_MAPPINGS,
+    **BOOLEAN_MAPPINGS,
+    **ASPECT_RATIO_MAPPINGS,
+}
+
+NODE_DISPLAY_NAME_MAPPINGS = {
+    **INTEGER_DISPLAY_MAPPINGS,
+    **FLOAT_DISPLAY_MAPPINGS,
+    **STRING_DISPLAY_MAPPINGS,
+    **BOOLEAN_DISPLAY_MAPPINGS,
+    **ASPECT_RATIO_DISPLAY_MAPPINGS,
+}
+
+__all__ = ['NODE_CLASS_MAPPINGS', 'NODE_DISPLAY_NAME_MAPPINGS']
