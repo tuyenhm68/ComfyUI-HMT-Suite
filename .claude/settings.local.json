@@ -6,7 +6,8 @@
       "Bash(git push:*)",
       "Bash(python -m py_compile:*)",
       "Bash(dir:*)",
-      "Bash(python -c:*)"
+      "Bash(python -c:*)",
+      "Bash(curl:*)"
     ]
   }
 }

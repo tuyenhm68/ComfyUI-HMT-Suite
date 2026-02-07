@@ -50,3 +50,4 @@ config.json
 docs/
 CHANGELOG.md
 DEVELOPMENT.md
+test_*

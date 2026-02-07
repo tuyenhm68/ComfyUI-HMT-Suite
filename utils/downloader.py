@@ -2,6 +2,7 @@
 File Downloader Utility
 Supports downloading files with progress tracking, cross-platform compatible.
 Enhanced with multi-threaded parallel downloading for maximum speed.
+Version 2.0: Added file integrity validation and disk space checking.
 """
 
 import os
@@ -26,10 +27,69 @@ def log_to_console(message: str, level: str = "INFO"):
         "ERROR": "\033[91m",     # Red
         "RESET": "\033[0m"
     }
-    
+
     color = colors.get(level, colors["INFO"])
     reset = colors["RESET"]
     print(f"{color}[Model Downloader - {level}]{reset} {message}", flush=True)
+
+
+def check_disk_space(path: Path, required_bytes: int) -> bool:
+    """Check if there's enough disk space available"""
+    try:
+        stat = shutil.disk_usage(path.parent if path.is_file() else path)
+        available = stat.free
+        # Add 10% buffer for safety
+        required_with_buffer = int(required_bytes * 1.1)
+        return available >= required_with_buffer
+    except Exception as e:
+        log_to_console(f"Could not check disk space: {e}", "WARNING")
+        return True  # Assume OK if we can't check
+
+
+def verify_file_size(file_path: Path, expected_size: int, tolerance: int = 0) -> bool:
+    """
+    Verify downloaded file size matches expected size
+
+    Args:
+        file_path: Path to downloaded file
+        expected_size: Expected file size in bytes
+        tolerance: Allowed size difference in bytes (default: 0 for exact match)
+
+    Returns:
+        True if size matches (within tolerance), False otherwise
+    """
+    if not file_path.exists():
+        return False
+
+    actual_size = file_path.stat().st_size
+    size_diff = abs(actual_size - expected_size)
+
+    if size_diff <= tolerance:
+        return True
+    else:
+        log_to_console(
+            f"File size mismatch! Expected: {expected_size:,} bytes, "
+            f"Got: {actual_size:,} bytes, Diff: {size_diff:,} bytes",
+            "ERROR"
+        )
+        return False
+
+
+def verify_part_size(part_path: Path, expected_size: int) -> bool:
+    """Verify a downloaded part has the correct size"""
+    if not part_path.exists():
+        log_to_console(f"Part file missing: {part_path}", "ERROR")
+        return False
+
+    actual_size = part_path.stat().st_size
+    if actual_size != expected_size:
+        log_to_console(
+            f"Part size mismatch: {part_path.name} - "
+            f"Expected: {expected_size:,}, Got: {actual_size:,}",
+            "ERROR"
+        )
+        return False
+    return True
 
 
 class DownloadProgress:
@@ -243,11 +303,21 @@ class FileDownloader:
                          accept_ranges = True
 
             self.progress.set_total(total_size)
-            
+
             if total_size > 0:
                 log_to_console(f"File size: {total_size / (1024*1024):.2f} MB", "INFO")
+
+                # Check disk space
+                if not check_disk_space(dest_path, total_size):
+                    available_mb = shutil.disk_usage(dest_path).free / (1024*1024)
+                    required_mb = total_size / (1024*1024)
+                    raise Exception(
+                        f"Insufficient disk space. Required: {required_mb:.2f} MB, "
+                        f"Available: {available_mb:.2f} MB"
+                    )
+                log_to_console("Disk space check: OK", "SUCCESS")
             else:
-                log_to_console("File size unknown.", "WARNING")
+                log_to_console("File size unknown. Skipping disk space check.", "WARNING")
 
             # DECIDE STRATEGY
             use_parallel = False
@@ -326,16 +396,43 @@ class FileDownloader:
                     monitor_thread.join(timeout=1.0) # Wait a bit but don't hang
                     print() # Newline
 
-                    # Combine parts
+                    # Verify all parts before merging
+                    log_to_console("Verifying downloaded parts...", "INFO")
+                    all_parts_valid = True
+                    for i, (p_path, (start, end)) in enumerate(zip(part_files, ranges)):
+                        expected_part_size = end - start + 1
+                        if not verify_part_size(p_path, expected_part_size):
+                            all_parts_valid = False
+                            break
+
+                    if not all_parts_valid:
+                        raise Exception("Part verification failed. Download incomplete.")
+
+                    log_to_console("All parts verified successfully", "SUCCESS")
+
+                    # Combine parts to temporary file first (atomic write pattern)
+                    temp_output = file_path.with_suffix(file_path.suffix + '.tmp')
                     log_to_console("Merging parts...", "INFO")
-                    with open(file_path, 'wb') as outfile:
+                    with open(temp_output, 'wb') as outfile:
                         for p_path in part_files:
-                            if p_path.exists():
-                                with open(p_path, 'rb') as infile:
-                                    shutil.copyfileobj(infile, outfile)
-                            else:
-                                raise Exception(f"Part file missing: {p_path}")
-                    
+                            with open(p_path, 'rb') as infile:
+                                shutil.copyfileobj(infile, outfile)
+
+                    # Verify merged file size
+                    if not verify_file_size(temp_output, total_size, tolerance=0):
+                        temp_output.unlink()  # Delete corrupted file
+                        raise Exception(
+                            f"Merged file size verification failed. "
+                            f"Expected: {total_size:,} bytes"
+                        )
+
+                    log_to_console("File integrity verified", "SUCCESS")
+
+                    # Atomic rename: move temp file to final destination
+                    if file_path.exists():
+                        file_path.unlink()  # Remove old file if exists
+                    temp_output.rename(file_path)
+
                     # Cleanup temp dir
                     try:
                         shutil.rmtree(temp_dir)
@@ -356,25 +453,27 @@ class FileDownloader:
                     raise e
 
             else:
-                # Single threaded fallback
+                # Single threaded fallback - use atomic write pattern
+                temp_output = file_path.with_suffix(file_path.suffix + '.tmp')
+
                 # Increase timeout: 60s connection + 120s read
                 with self.session.get(url, stream=True, timeout=(60, 120), headers=self.auth_headers) as response:
                     response.raise_for_status()
-                    
+
                     last_log_percentage = -1
-                    with open(file_path, 'wb') as f:
+                    with open(temp_output, 'wb') as f:
                         for chunk in response.iter_content(chunk_size=self.chunk_size):
                             if chunk:
                                 f.write(chunk)
                                 self.progress.update(len(chunk))
-                                
+
                                 # Log
                                 if self.progress.percentage != last_log_percentage:
                                     downloaded_mb = self.progress.downloaded / (1024 * 1024)
                                     total_mb = (self.progress.total_size / (1024 * 1024)) if self.progress.total_size else 0
                                     print(f"\r\033[94m[Model Downloader - INFO]\033[0m Progress: {self.progress.percentage}% ({downloaded_mb:.2f}/{total_mb:.2f} MB)", end='', flush=True)
                                     last_log_percentage = self.progress.percentage
-                                    
+
                                     if progress_callback:
                                         try:
                                             progress_callback(self.progress)
@@ -382,13 +481,34 @@ class FileDownloader:
                                             pass
                     print() # Newline
 
+                # Verify file size if known
+                if total_size > 0:
+                    log_to_console("Verifying file integrity...", "INFO")
+                    if not verify_file_size(temp_output, total_size, tolerance=0):
+                        temp_output.unlink()  # Delete corrupted file
+                        raise Exception(
+                            f"Downloaded file size verification failed. "
+                            f"Expected: {total_size:,} bytes"
+                        )
+                    log_to_console("File integrity verified", "SUCCESS")
+
+                # Atomic rename: move temp file to final destination
+                if file_path.exists():
+                    file_path.unlink()
+                temp_output.rename(file_path)
+
             elapsed = time.time() - start_time
             avg_speed = (self.progress.total_size / (1024*1024)) / elapsed if elapsed > 0 else 0
-            
+
+            # Final verification
+            final_size = file_path.stat().st_size
+            final_size_mb = final_size / (1024*1024)
+
             self.progress.status = "completed"
             self.progress.percentage = 100
-            
+
             log_to_console(f"Download completed: {file_path}", "SUCCESS")
+            log_to_console(f"Final file size: {final_size_mb:.2f} MB ({final_size:,} bytes)", "SUCCESS")
             log_to_console(f"Average Speed: {avg_speed:.2f} MB/s", "SUCCESS")
             
             if progress_callback:
@@ -406,9 +526,19 @@ class FileDownloader:
             self.progress.status = "error"
             self.progress.error_message = str(e)
             log_to_console(f"Download failed: {str(e)}", "ERROR")
+
+            # Cleanup: remove temporary files
+            try:
+                temp_output = file_path.with_suffix(file_path.suffix + '.tmp')
+                if temp_output.exists():
+                    log_to_console("Cleaning up temporary file...", "INFO")
+                    temp_output.unlink()
+            except:
+                pass
+
             if progress_callback:
                 progress_callback(self.progress)
-               
+
             return {
                 "success": False,
                 "message": f"Download failed: {str(e)}",
