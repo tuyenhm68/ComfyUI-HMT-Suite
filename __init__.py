@@ -19,3 +19,10 @@ try:
     run_auto_update_on_startup()
 except Exception as e:
     print(f"[ComfyUI-HMT-Suite] Auto-update error: {e}")
+
+# Register API routes
+try:
+    from .server_routes import setup_routes
+    setup_routes()
+except Exception as e:
+    print(f"[ComfyUI-HMT-Suite] API routes registration error: {e}")

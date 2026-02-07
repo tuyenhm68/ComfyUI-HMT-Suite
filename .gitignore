@@ -45,7 +45,7 @@ test_downloads/
 *.temp
 
 # User configuration
-config.json
+# config.json
 
 docs/
 CHANGELOG.md
