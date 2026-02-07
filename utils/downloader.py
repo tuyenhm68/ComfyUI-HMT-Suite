@@ -92,6 +92,73 @@ def verify_part_size(part_path: Path, expected_size: int) -> bool:
     return True
 
 
+def fix_huggingface_url(url: str) -> str:
+    """
+    Auto-fix HuggingFace URLs by converting /blob/ to /resolve/
+
+    Common mistake: Using /blob/ URLs (HTML page) instead of /resolve/ (direct download)
+    Example:
+        Wrong: https://huggingface.co/model/blob/main/file.safetensors (HTML page)
+        Fixed: https://huggingface.co/model/resolve/main/file.safetensors (direct download)
+    """
+    if 'huggingface.co' in url and '/blob/' in url:
+        fixed_url = url.replace('/blob/', '/resolve/')
+        log_to_console(
+            f"HuggingFace URL auto-fixed: /blob/ → /resolve/",
+            "WARNING"
+        )
+        log_to_console(f"Original: {url}", "INFO")
+        log_to_console(f"Fixed: {fixed_url}", "INFO")
+        return fixed_url
+    return url
+
+
+def validate_model_file(file_path: Path, file_size: int) -> bool:
+    """
+    Validate that a model file is legitimate (not an HTML page or error file)
+
+    Checks:
+    - Model files (.safetensors, .ckpt, .bin, .pth) should be > 1MB
+    - Detects if file is actually HTML (common mistake with wrong URLs)
+    """
+    # Known model file extensions that should be large
+    model_extensions = {'.safetensors', '.ckpt', '.bin', '.pth', '.pt', '.onnx'}
+
+    if file_path.suffix.lower() in model_extensions:
+        # Model files should be at least 1MB
+        min_size = 1024 * 1024  # 1MB
+        if file_size < min_size:
+            log_to_console(
+                f"Suspicious model file size: {file_size:,} bytes ({file_size/1024:.1f} KB)",
+                "ERROR"
+            )
+            log_to_console(
+                f"Model files (*.safetensors, *.ckpt, etc.) are usually > 1MB",
+                "ERROR"
+            )
+
+            # Check if it's actually HTML
+            try:
+                with open(file_path, 'rb') as f:
+                    header = f.read(512)
+                    if b'<!DOCTYPE' in header or b'<html' in header.lower():
+                        log_to_console(
+                            "Downloaded file is HTML, not a model file!",
+                            "ERROR"
+                        )
+                        log_to_console(
+                            "This usually means you used /blob/ instead of /resolve/ in HuggingFace URL",
+                            "ERROR"
+                        )
+                        return False
+            except:
+                pass
+
+            return False
+
+    return True
+
+
 class DownloadProgress:
     """Track download progress"""
     def __init__(self):
@@ -226,6 +293,9 @@ class FileDownloader:
         try:
             self.progress = DownloadProgress() # Reset progress
             self.progress.status = "downloading"
+
+            # Auto-fix HuggingFace URLs (blob → resolve)
+            url = fix_huggingface_url(url)
 
             # Set authentication headers if token provided
             self.auth_headers = {}
@@ -503,6 +573,15 @@ class FileDownloader:
             # Final verification
             final_size = file_path.stat().st_size
             final_size_mb = final_size / (1024*1024)
+
+            # Validate model file integrity
+            if not validate_model_file(file_path, final_size):
+                file_path.unlink()  # Delete invalid file
+                raise Exception(
+                    "Downloaded file validation failed. "
+                    "File appears to be HTML or corrupted. "
+                    "For HuggingFace, use /resolve/ instead of /blob/ in URL."
+                )
 
             self.progress.status = "completed"
             self.progress.percentage = 100
