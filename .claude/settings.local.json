@@ -7,7 +7,11 @@
       "Bash(python -m py_compile:*)",
       "Bash(dir:*)",
       "Bash(python -c:*)",
-      "Bash(curl:*)"
+      "Bash(curl:*)",
+      "WebFetch(domain:docs.comfy.org)",
+      "WebFetch(domain:github.com)",
+      "Bash(find:*)",
+      "WebFetch(domain:deepwiki.com)"
     ]
   }
 }
