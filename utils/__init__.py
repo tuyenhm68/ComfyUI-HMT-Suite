@@ -8,6 +8,7 @@ from .custom_node_installer import CustomNodeInstaller
 from .auto_updater import AutoUpdater, run_auto_update_on_startup
 from .resource_discovery import get_all_models, get_installed_custom_nodes, get_node_mappings
 from .updater import ComfyUIUpdater
+from .python_env import get_env_info, check_package, pip_install
 
 __all__ = [
     'FileDownloader',
@@ -19,5 +20,9 @@ __all__ = [
     'get_all_models',
     'get_installed_custom_nodes',
     'get_node_mappings',
-    'ComfyUIUpdater'
+    'ComfyUIUpdater',
+    'get_env_info',
+    'check_package',
+    'pip_install'
 ]
+

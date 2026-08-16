@@ -174,6 +174,76 @@ def register_routes(server):
         except Exception as e:
             return web.json_response({"error": str(e)}, status=500)
 
+    # --- Python Environment & Pip Management endpoints ---
+    from .utils.python_env import get_env_info, check_package, pip_install
+    import asyncio
+
+    @server.routes.get("/hmt/env")
+    async def get_environment_info(request):
+        """
+        GET /hmt/env
+        Returns detailed Python environment info (sys.executable, versions, CUDA, portable flag, etc.)
+        """
+        try:
+            info = get_env_info()
+            return web.json_response(info)
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
+    @server.routes.post("/hmt/check-package")
+    async def check_package_api(request):
+        """
+        POST /hmt/check-package
+        Check if a Python package/module is installed.
+        Body: {"package": "triton"}
+        """
+        try:
+            body = await request.json() if request.body_exists else {}
+            package_name = body.get("package", "")
+            if not package_name:
+                return web.json_response(
+                    {"installed": False, "error": "Field 'package' is required in request body"},
+                    status=400
+                )
+            result = check_package(package_name)
+            return web.json_response(result)
+        except Exception as e:
+            return web.json_response({"installed": False, "error": str(e)}, status=500)
+
+    @server.routes.post("/hmt/pip-install")
+    async def pip_install_api(request):
+        """
+        POST /hmt/pip-install
+        Execute pip install in ComfyUI's active Python environment.
+        Body: {
+            "package": "triton-windows",
+            "extra_args": ["--no-cache-dir"],
+            "timeout": 300
+        }
+        """
+        try:
+            body = await request.json() if request.body_exists else {}
+            package = body.get("package") or body.get("packages")
+            if not package:
+                return web.json_response(
+                    {"success": False, "error": "Field 'package' or 'packages' is required"},
+                    status=400
+                )
+            extra_args = body.get("extra_args", [])
+            timeout = body.get("timeout", 300)
+
+            # Run in thread pool to avoid blocking the aiohttp async event loop
+            loop = asyncio.get_event_loop()
+            result = await loop.run_in_executor(
+                None,
+                lambda: pip_install(package=package, extra_args=extra_args, timeout=timeout)
+            )
+
+            status_code = 200 if result.get("success") else 500
+            return web.json_response(result, status=status_code)
+        except Exception as e:
+            return web.json_response({"success": False, "error": str(e)}, status=500)
+
     print("[ComfyUI-HMT-Suite] API endpoints registered:")
     print("  - GET /hmt/models/list")
     print("  - GET /hmt/custom-nodes/list")
@@ -183,6 +253,10 @@ def register_routes(server):
     print("  - POST /hmt/update/comfyui")
     print("  - GET /hmt/update/custom-nodes/list")
     print("  - POST /hmt/update/custom-nodes")
+    print("  - GET /hmt/env")
+    print("  - POST /hmt/check-package")
+    print("  - POST /hmt/pip-install")
+
 
 
 def setup_routes():
