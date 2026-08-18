@@ -182,14 +182,17 @@ class ModelDownloaderNode:
         
         except Exception as e:
             error_msg = f"Download failed: {str(e)}"
-            log_to_console(f"Exception: {error_msg}", "ERROR")
-            log_to_console("="*60, "ERROR")
-            
+
+            # Ghi trang thai TRUOC khi log: neu viec ghi log gap su co thi ket qua
+            # loi van den duoc client, thay vi node chet va nuot mat nguyen nhan.
             if self.download_id:
                 ModelDownloaderNode._download_progress[self.download_id] = {
                     "status": "error",
                     "error_message": error_msg
                 }
+
+            log_to_console(f"Exception: {error_msg}", "ERROR")
+            log_to_console("="*60, "ERROR")
             return ("error", "", error_msg, self.current_percentage)
     
     @classmethod

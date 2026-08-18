@@ -30,8 +30,33 @@ def log_to_console(message: str, level: str = "INFO"):
 
     color = colors.get(level, colors["INFO"])
     reset = colors["RESET"]
-    print(f"{color}[Model Downloader - {level}]{reset} {message}", flush=True)
+    _safe_print(f"{color}[Model Downloader - {level}]{reset} {message}")
 
+
+
+
+def _safe_print(text: str, end: str = "\n"):
+    """In ra console, KHONG BAO GIO nem loi.
+
+    stdout co the khong ghi duoc: tien trinh bi mo coi (dau doc cua pipe da dong),
+    chay khong console (pythonw / service / docker), hoac stream bi dong giua chung.
+    Khi do print() nem OSError [Errno 22] Invalid argument tren Windows.
+
+    log_to_console duoc goi 239 lan trong pack nay, ke ca ben trong khoi `except`.
+    Neu no nem loi thi mot su co GHI LOG se giet ca node va nuot mat thong bao loi
+    that -- nguoi dung chi thay "OSError: [Errno 22] Invalid argument".
+    Ghi log khong bao gio duoc phep lam hong viec chinh.
+    """
+    try:
+        print(text, end=end, flush=True)
+        return
+    except Exception:
+        pass
+    try:
+        sys.stderr.write(text + end)
+        sys.stderr.flush()
+    except Exception:
+        pass
 
 def check_disk_space(path: Path, required_bytes: int) -> bool:
     """Check if there's enough disk space available"""
@@ -436,7 +461,7 @@ class FileDownloader:
                         if pct != last_pct and pct >= 0:
                             downloaded_mb = self.progress.downloaded / (1024 * 1024)
                             total_mb = self.progress.total_size / (1024 * 1024)
-                            print(f"\r\033[94m[Model Downloader - INFO]\033[0m Progress: {pct}% ({downloaded_mb:.2f}/{total_mb:.2f} MB)", end='', flush=True)
+                            _safe_print(f"\r\033[94m[Model Downloader - INFO]\033[0m Progress: {pct}% ({downloaded_mb:.2f}/{total_mb:.2f} MB)", end='')
                             last_pct = pct
                             if progress_callback:
                                 try:
@@ -464,7 +489,7 @@ class FileDownloader:
                     
                     stop_monitor = True
                     monitor_thread.join(timeout=1.0) # Wait a bit but don't hang
-                    print() # Newline
+                    _safe_print("") # Newline
 
                     # Verify all parts before merging
                     log_to_console("Verifying downloaded parts...", "INFO")
@@ -541,7 +566,7 @@ class FileDownloader:
                                 if self.progress.percentage != last_log_percentage:
                                     downloaded_mb = self.progress.downloaded / (1024 * 1024)
                                     total_mb = (self.progress.total_size / (1024 * 1024)) if self.progress.total_size else 0
-                                    print(f"\r\033[94m[Model Downloader - INFO]\033[0m Progress: {self.progress.percentage}% ({downloaded_mb:.2f}/{total_mb:.2f} MB)", end='', flush=True)
+                                    _safe_print(f"\r\033[94m[Model Downloader - INFO]\033[0m Progress: {self.progress.percentage}% ({downloaded_mb:.2f}/{total_mb:.2f} MB)", end='')
                                     last_log_percentage = self.progress.percentage
 
                                     if progress_callback:
@@ -549,7 +574,7 @@ class FileDownloader:
                                             progress_callback(self.progress)
                                         except:
                                             pass
-                    print() # Newline
+                    _safe_print("") # Newline
 
                 # Verify file size if known
                 if total_size > 0:

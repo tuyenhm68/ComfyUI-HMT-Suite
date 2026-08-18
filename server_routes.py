@@ -35,6 +35,22 @@ def register_routes(server):
                 status=500
             )
 
+    @server.routes.get("/hmt/download/progress")
+    async def get_download_progress_api(request):
+        """
+        GET /hmt/download/progress
+        Tien do cua moi download dang chay.
+
+        ModelDownloaderNode giu tien do trong dict _download_progress NOI BO tien
+        trinh, khong co route nao phoi ra -- client buoc phai cao console log de
+        biet %. Route nay tra thang dict do.
+        """
+        try:
+            from .nodes.model_downloader import ModelDownloaderNode
+            return web.json_response(ModelDownloaderNode.get_all_downloads())
+        except Exception as e:
+            return web.json_response({"error": str(e)}, status=500)
+
     @server.routes.get("/hmt/custom-nodes/list")
     async def get_custom_nodes_list(request):
         """
